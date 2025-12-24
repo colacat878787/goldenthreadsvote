@@ -319,7 +319,7 @@ const PollCard = ({ poll, index, votedOptionId, onVote }) => {
 
               {isSelected && (
                   <motion.div initial={{scale:0}} animate={{scale:1}} className="text-gold-400 font-bold text-xs uppercase tracking-widest border border-gold-400 px-3 py-1 rounded-full">
-                      已投票
+                      已投票!
                   </motion.div>
               )}
             </motion.button>
