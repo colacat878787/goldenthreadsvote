@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold-primary: #D4AF37;
+  --gold-light: #F9F1D0;
+  --gold-dark: #806921;
+}
+
+body {
+  background-color: #000;
+  color: #fff;
+  font-family: 'Noto Sans TC', sans-serif;
+  overflow-x: hidden;
+}
+
+/* 奢華標題字體 */
+.font-luxury {
+  font-family: 'Playfair Display', serif;
+}
+
+/* 高級金色漸層文字 */
+.text-gold-gradient {
+  background: linear-gradient(to bottom, #F9F1D0 0%, #D4AF37 40%, #AA8C2C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 玻璃擬態卡片 */
+.glass-card {
+  background: rgba(10, 10, 10, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* 捲軸美化 */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar-thumb { background: linear-gradient(to bottom, #806921, #D4AF37); border-radius: 3px; }
+
+/* 載入動畫 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
