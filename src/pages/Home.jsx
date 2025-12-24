@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
-import { Loader2, ChevronDown, Award } from 'lucide-react';
+import { Loader2, ChevronDown, Award, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // 1. 引入跳轉功能
 
 const LOGO_URL = "https://i.ibb.co/Q3jzj8r3/601973223-17842560999666048-6924136326722950788-n.jpg";
 
-// 內部通知組件 (取代 alert)
+// 內部通知組件
 const Toast = ({ message, onClose }) => (
   <motion.div 
     initial={{ opacity: 0, y: 50 }} 
@@ -18,12 +19,10 @@ const Toast = ({ message, onClose }) => (
 );
 
 const Home = () => {
+  const navigate = useNavigate(); // 2. 初始化跳轉
   const [siteStatus, setSiteStatus] = useState('waiting');
   const [polls, setPolls] = useState([]);
-  
-  // 記錄使用者在每個投票中投了哪個選項: { pollId: optionId }
   const [votedMap, setVotedMap] = useState({});
-  
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
   const [toastMsg, setToastMsg] = useState('');
@@ -40,7 +39,6 @@ const Home = () => {
   };
 
   useEffect(() => {
-    // 3秒後關閉起始動畫
     const timer = setTimeout(() => setShowIntro(false), 3500);
     fetchData();
     
@@ -58,7 +56,6 @@ const Home = () => {
     const { data: settings } = await supabase.from('site_settings').select('*').single();
     if (settings) setSiteStatus(settings.status);
 
-    // 抓取投票資料 (包含時間過濾)
     const now = new Date().toISOString();
     const { data: pollsData } = await supabase
       .from('polls')
@@ -66,7 +63,7 @@ const Home = () => {
       .eq('is_active', true)
       .order('id');
     
-    // 過濾時間 (如果有設定開始/結束時間)
+    // 過濾時間
     const activePolls = pollsData?.filter(p => {
         if (p.start_at && new Date(p.start_at) > new Date()) return false;
         if (p.end_at && new Date(p.end_at) < new Date()) return false;
@@ -75,7 +72,6 @@ const Home = () => {
 
     setPolls(activePolls);
     
-    // 檢查已投項目 (精確到選項 ID)
     const voterId = getVoterId();
     const { data: votes } = await supabase.from('votes').select('poll_id, option_id').eq('voter_identity', voterId);
     
@@ -97,7 +93,6 @@ const Home = () => {
     }
     if (votedMap[pollId]) return;
 
-    // 樂觀更新
     setVotedMap(prev => ({ ...prev, [pollId]: optionId }));
     showToast("投票成功！感謝您的參與");
 
@@ -122,12 +117,17 @@ const Home = () => {
     pollsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 3. 跳轉到管理員頁面的函數
+  const handleAdminClick = () => {
+      navigate('/panziiadmin');
+  };
+
   if (loading) return <div className="h-screen bg-black flex items-center justify-center"><Loader2 className="animate-spin text-gold-400 w-10 h-10" /></div>;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-gold-400 selection:text-black overflow-hidden relative">
       
-      {/* 全局背景光暈 */}
+      {/* 背景光暈 */}
       <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-gold-600/10 rounded-full blur-[120px]"></div>
          <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-gold-400/5 rounded-full blur-[150px]"></div>
@@ -136,7 +136,6 @@ const Home = () => {
       <AnimatePresence>
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg('')} />}
         
-        {/* 起始畫面 */}
         {showIntro && (
           <motion.div 
             className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center"
@@ -162,7 +161,6 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      {/* Header / Hero Section */}
       <motion.header 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -200,7 +198,6 @@ const Home = () => {
         </motion.button>
       </motion.header>
 
-      {/* Main Content */}
       <main ref={pollsSectionRef} className="max-w-6xl mx-auto px-4 py-24 relative z-10 min-h-[80vh]">
         <div className="text-center mb-16">
            <h2 className="text-3xl md:text-4xl font-luxury text-white mb-2">年度獎項</h2>
@@ -238,7 +235,7 @@ const Home = () => {
                   key={poll.id} 
                   poll={poll} 
                   index={index} 
-                  votedOptionId={votedMap[poll.id]} // 傳入已投的選項ID
+                  votedOptionId={votedMap[poll.id]} 
                   onVote={handleVote}
                 />
               ))}
@@ -248,14 +245,22 @@ const Home = () => {
         </AnimatePresence>
       </main>
       
-      <footer className="py-12 text-center border-t border-zinc-900 bg-black relative z-10">
+      <footer className="py-12 text-center border-t border-zinc-900 bg-black relative z-10 flex flex-col items-center gap-4">
          <p className="text-zinc-600 text-xs tracking-widest uppercase">© 2025 Golden Threads Awards. All rights reserved.</p>
+         
+         {/* 4. 極度隱密的後台入口按鈕 */}
+         <button 
+            onClick={handleAdminClick} 
+            className="text-zinc-900 hover:text-zinc-800 transition-colors p-2"
+            title="Admin Login" // 滑鼠停太久才會看到提示
+         >
+            <Lock size={12} />
+         </button>
       </footer>
     </div>
   );
 };
 
-// 獨立的投票卡片組件 (樣式大升級)
 const PollCard = ({ poll, index, votedOptionId, onVote }) => {
   const hasVoted = !!votedOptionId;
 
@@ -281,7 +286,7 @@ const PollCard = ({ poll, index, votedOptionId, onVote }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
         {poll.options.map((option) => {
            const isSelected = votedOptionId === option.id;
-           const isDisabled = hasVoted; // 如果投過任何一個，所有按鈕都 disable
+           const isDisabled = hasVoted; 
 
            return (
             <motion.button
