@@ -9,26 +9,36 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
+// src/pages/AdminLogin.jsx
 
-    // 簡單的資料庫驗證
-    const { data, error } = await supabase
-      .from('admins')
-      .select('*')
-      .eq('username', username)
-      .eq('password', password) // 實際應使用 Hash 比對
-      .single();
+// ... 前面的 import 保持不變
 
-    if (data) {
-      localStorage.setItem('admin_token', JSON.stringify(data));
-      navigate('/panziiadmin/dashboard');
-    } else {
-      setError('帳號或密碼錯誤，請檢查您的金脆獎權限');
-    }
-  };
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setError('');
 
+  // ▼▼▼ 修改這裡：改用 RPC 安全呼叫 ▼▼▼
+  // 我們不再直接查詢資料表，而是呼叫後端函數 verify_admin
+  const { data, error } = await supabase.rpc('verify_admin', { 
+    user_input: username, 
+    pass_input: password 
+  });
+
+  if (error) {
+    console.error("Login RPC error:", error);
+    setError('系統錯誤，請稍後再試');
+  } else if (data) {
+    // 登入成功 (data 裡面只有 id 和 username，沒有密碼)
+    localStorage.setItem('admin_token', JSON.stringify(data));
+    navigate('/panziiadmin/dashboard');
+  } else {
+    // 登入失敗 (data 為 null)
+    setError('帳號或密碼錯誤，請檢查您的金脆獎權限');
+  }
+  // ▲▲▲ 修改結束 ▲▲▲
+};
+
+// ... 後面的 return 保持不變
   return (
     <div className="min-h-screen flex items-center justify-center bg-black relative">
        {/* 背景裝飾 */}
