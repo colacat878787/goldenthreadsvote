@@ -105,19 +105,42 @@ const AdminPanel = () => {
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // 上傳
       const { error } = await supabase.storage.from('poll_images').upload(filePath, file);
       if (error) {
           console.error('Upload Error:', error);
           return null;
       }
 
-      // 取得公開連結
       const { data } = supabase.storage.from('poll_images').getPublicUrl(filePath);
       return data.publicUrl;
   };
 
-  // --- 提交 ---
+  // --- 移除選項 ---
+  const handleRemoveOption = async (index) => {
+      const target = pollOptions[index];
+      if (target.id) {
+          if (!confirm(`⚠️ 嚴重警告：\n確定刪除選項「${target.text}」嗎？\n這將會同時刪除該選項的所有票數！`)) return;
+          setLoading(true);
+          try {
+              await supabase.from('votes').delete().eq('option_id', target.id);
+              await supabase.from('options').delete().eq('id', target.id);
+              const newOpts = pollOptions.filter((_, i) => i !== index);
+              setPollOptions(newOpts);
+              showMsg("已刪除該選項與相關票數");
+              fetchData(); 
+          } catch (error) {
+              console.error(error);
+              showMsg("刪除失敗");
+          } finally {
+              setLoading(false);
+          }
+      } else {
+          const newOpts = pollOptions.filter((_, i) => i !== index);
+          setPollOptions(newOpts);
+      }
+  };
+
+  // --- 提交 (新增 或 更新) ---
   const handleSubmit = async () => {
     if (!pollTitle) return showMsg("請輸入標題");
     setLoading(true);
@@ -184,12 +207,26 @@ const AdminPanel = () => {
     }
   };
 
+  // --- 🔥 [新功能] 時間顯示修復 helper ---
+  const formatLocalTime = (isoString) => {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      // 利用 offset 修正，讓 ISO 字串顯示為當地時間
+      const offset = date.getTimezoneOffset() * 60000;
+      const localDate = new Date(date.getTime() - offset);
+      return localDate.toISOString().slice(0, 16);
+  };
+
+  // --- 進入編輯模式 ---
   const handleEditClick = (poll) => {
       setEditingId(poll.id);
       setPollTitle(poll.title);
       setPollDesc(poll.description || '');
-      setStartAt(poll.start_at ? poll.start_at.slice(0, 16) : '');
-      setEndAt(poll.end_at ? poll.end_at.slice(0, 16) : '');
+      
+      // 🔥 [使用] 這裡套用轉換函式，顯示正確的台灣時間
+      setStartAt(poll.start_at ? formatLocalTime(poll.start_at) : '');
+      setEndAt(poll.end_at ? formatLocalTime(poll.end_at) : '');
+
       setPollOptions(poll.options.map(o => ({
           id: o.id,
           text: o.text,
@@ -311,7 +348,7 @@ const AdminPanel = () => {
                              <input type="datetime-local" className={inputClass} style={{ colorScheme: 'dark' }} value={endAt} onChange={e => setEndAt(e.target.value)} />
                         </div>
 
-                        {/* 選項編輯區 - 支援電腦上傳 */}
+                        {/* 選項編輯區 */}
                         <div className="space-y-3 pt-4 border-t border-zinc-800 mt-4">
                             <label className="text-xs text-zinc-500 uppercase font-bold flex justify-between items-center">
                                 選項 <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">{pollOptions.length}</span>
@@ -325,7 +362,6 @@ const AdminPanel = () => {
                                             className="bg-transparent border-b border-zinc-800 w-full text-sm text-white focus:border-gold-500 outline-none pb-1"
                                             placeholder={`選項內容 (選填)`}
                                             value={opt.text}
-                                            disabled={editingId && opt.id}
                                             onChange={e => {
                                                 const newOpts = [...pollOptions];
                                                 newOpts[idx].text = e.target.value;
@@ -333,9 +369,9 @@ const AdminPanel = () => {
                                             }}
                                         />
 
-                                        {pollOptions.length > 2 && !editingId && (
+                                        {pollOptions.length > 2 && (
                                             <button 
-                                                onClick={() => {const newOpts = pollOptions.filter((_, i) => i !== idx); setPollOptions(newOpts);}}
+                                                onClick={() => handleRemoveOption(idx)}
                                                 className="text-zinc-600 hover:text-red-500 p-1"
                                             >
                                                 <Trash2 size={16}/>
@@ -343,7 +379,7 @@ const AdminPanel = () => {
                                         )}
                                     </div>
                                     
-                                    {/* 圖片上傳區塊 - 這裡就是你要的功能 */}
+                                    {/* 圖片上傳區塊 */}
                                     {opt.preview ? (
                                         <div className="relative w-full h-32 bg-black rounded-lg overflow-hidden border border-zinc-800 group/img">
                                             <img src={opt.preview} alt="Preview" className="w-full h-full object-cover" />
@@ -371,11 +407,9 @@ const AdminPanel = () => {
                                 </div>
                             ))}
                             
-                            {!editingId && (
-                                <button onClick={() => setPollOptions([...pollOptions, { text: '', image: null, preview: null }])} className="w-full py-2 border border-dashed border-zinc-700 text-zinc-500 text-xs rounded hover:border-gold-500 hover:text-gold-500 transition-colors">
-                                    + 增加選項
-                                </button>
-                            )}
+                            <button onClick={() => setPollOptions([...pollOptions, { text: '', image: null, preview: null }])} className="w-full py-2 border border-dashed border-zinc-700 text-zinc-500 text-xs rounded hover:border-gold-500 hover:text-gold-500 transition-colors">
+                                + 增加選項
+                            </button>
                         </div>
 
                         <div className="flex gap-3 mt-6">
@@ -392,7 +426,7 @@ const AdminPanel = () => {
                                     ${loading ? 'opacity-50 cursor-not-allowed' : ''}
                                 `}
                             >
-                                {loading ? '上傳中...' : (editingId ? <><Save size={18}/> 保存修改</> : <><Plus size={18}/> 確認發布</>)}
+                                {loading ? '處理中...' : (editingId ? <><Save size={18}/> 保存修改</> : <><Plus size={18}/> 確認發布</>)}
                             </button>
                         </div>
                     </div>
@@ -422,7 +456,6 @@ const AdminPanel = () => {
                                     </div>
                                     <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{poll.description || "無描述"}</p>
                                     
-                                    {/* 這裡也可以顯示選項有幾張圖 */}
                                     <div className="flex flex-wrap gap-2 text-[10px] lg:text-xs text-zinc-500 font-mono">
                                         <div className="flex items-center gap-1.5 bg-zinc-900 px-2 py-1 rounded"><ImageIcon size={12} className="text-gold-500"/><span>{poll.options.filter(o=>o.image_url).length} 圖片</span></div>
                                         <div className="flex items-center gap-1.5 bg-zinc-900 px-2 py-1 rounded"><CheckCircle size={12} className="text-gold-500"/><span>{poll.options.length} 選項</span></div>

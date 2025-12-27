@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
-import { Loader2, ChevronDown, Award, Lock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // 1. 引入跳轉功能
+import { Loader2, ChevronDown, Award, Lock, ZoomIn, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const LOGO_URL = "https://i.ibb.co/Q3jzj8r3/601973223-17842560999666048-6924136326722950788-n.jpg";
 
@@ -18,17 +18,47 @@ const Toast = ({ message, onClose }) => (
   </motion.div>
 );
 
+// 圖片放大 Lightbox 組件
+const ImageLightbox = ({ src, onClose }) => {
+  if (!src) return null;
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out backdrop-blur-sm"
+    >
+      {/* 關閉按鈕 */}
+      <button className="absolute top-5 right-5 text-zinc-500 hover:text-white p-2">
+        <X size={32} />
+      </button>
+      
+      <motion.img 
+        initial={{ scale: 0.8 }}
+        animate={{ scale: 1 }}
+        src={src} 
+        className="max-w-full max-h-screen object-contain shadow-2xl rounded-lg"
+        onClick={(e) => e.stopPropagation()} // 點圖片不關閉，點背景才關閉
+      />
+    </motion.div>
+  );
+};
+
 const Home = () => {
-  const navigate = useNavigate(); // 2. 初始化跳轉
+  const navigate = useNavigate();
   const [siteStatus, setSiteStatus] = useState('waiting');
   const [polls, setPolls] = useState([]);
   const [votedMap, setVotedMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
   const [toastMsg, setToastMsg] = useState('');
+  
+  // 新增：放大的圖片 URL
+  const [zoomedImage, setZoomedImage] = useState(null);
+  
   const pollsSectionRef = useRef(null);
 
-  // 模擬指紋ID
   const getVoterId = () => {
     let id = localStorage.getItem('voter_id');
     if (!id) {
@@ -56,19 +86,25 @@ const Home = () => {
     const { data: settings } = await supabase.from('site_settings').select('*').single();
     if (settings) setSiteStatus(settings.status);
 
-    const now = new Date().toISOString();
     const { data: pollsData } = await supabase
       .from('polls')
       .select(`*, options(*)`)
       .eq('is_active', true)
-      .order('id');
+      .order('sort_order', { ascending: true }); // 確保照順序排
     
     // 過濾時間
     const activePolls = pollsData?.filter(p => {
-        if (p.start_at && new Date(p.start_at) > new Date()) return false;
-        if (p.end_at && new Date(p.end_at) < new Date()) return false;
+        // 如果現在時間小於開始時間 -> 不顯示 (或顯示未開始，看需求，這邊先照舊邏輯)
+        if (p.start_at && new Date() < new Date(p.start_at)) return false;
+        // 如果現在時間大於結束時間 -> 不顯示 (或顯示已結束)
+        if (p.end_at && new Date() > new Date(p.end_at)) return false;
         return true;
     }) || [];
+
+    // 整理選項 ID 順序
+    activePolls.forEach(poll => {
+      poll.options.sort((a, b) => a.id - b.id);
+    });
 
     setPolls(activePolls);
     
@@ -117,7 +153,6 @@ const Home = () => {
     pollsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // 3. 跳轉到管理員頁面的函數
   const handleAdminClick = () => {
       navigate('/panziiadmin');
   };
@@ -127,11 +162,10 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-gold-400 selection:text-black overflow-hidden relative">
       
-      {/* 背景光暈 */}
-      <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0">
-         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-gold-600/10 rounded-full blur-[120px]"></div>
-         <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-gold-400/5 rounded-full blur-[150px]"></div>
-      </div>
+      {/* Lightbox */}
+      <AnimatePresence>
+        {zoomedImage && <ImageLightbox src={zoomedImage} onClose={() => setZoomedImage(null)} />}
+      </AnimatePresence>
 
       <AnimatePresence>
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg('')} />}
@@ -237,6 +271,7 @@ const Home = () => {
                   index={index} 
                   votedOptionId={votedMap[poll.id]} 
                   onVote={handleVote}
+                  onZoom={setZoomedImage} // 傳遞放大函數
                 />
               ))}
               {polls.length === 0 && <p className="text-center text-gray-500">目前沒有符合時間的投票項目。</p>}
@@ -248,11 +283,10 @@ const Home = () => {
       <footer className="py-12 text-center border-t border-zinc-900 bg-black relative z-10 flex flex-col items-center gap-4">
          <p className="text-zinc-600 text-xs tracking-widest uppercase">© 2025 Golden Threads Awards. All rights reserved.</p>
          
-         {/* 4. 極度隱密的後台入口按鈕 */}
          <button 
             onClick={handleAdminClick} 
             className="text-zinc-900 hover:text-zinc-800 transition-colors p-2"
-            title="Admin Login" // 滑鼠停太久才會看到提示
+            title="Admin Login"
          >
             <Lock size={12} />
          </button>
@@ -261,7 +295,8 @@ const Home = () => {
   );
 };
 
-const PollCard = ({ poll, index, votedOptionId, onVote }) => {
+// 獨立的投票卡片組件 (圖片顯示優化)
+const PollCard = ({ poll, index, votedOptionId, onVote, onZoom }) => {
   const hasVoted = !!votedOptionId;
 
   return (
@@ -296,7 +331,7 @@ const PollCard = ({ poll, index, votedOptionId, onVote }) => {
               onClick={() => onVote(poll.id, option.id)}
               disabled={isDisabled}
               className={`
-                relative p-6 rounded-2xl text-left transition-all duration-300 flex items-center gap-6 group/btn border
+                relative p-6 rounded-2xl text-left transition-all duration-300 flex items-center gap-6 group/btn border overflow-hidden
                 ${isSelected 
                   ? 'bg-gold-600/20 border-gold-500 ring-1 ring-gold-500/50' 
                   : 'bg-black/40 border-zinc-800 hover:border-gold-500/50 hover:bg-zinc-900/60'}
@@ -304,27 +339,44 @@ const PollCard = ({ poll, index, votedOptionId, onVote }) => {
               `}
             >
               {option.image_url ? (
-                  <img src={option.image_url} className="w-16 h-16 rounded-full object-cover border border-zinc-700" />
+                  // 優化後的圖片顯示：完整顯示 (contain)，背景黑，點擊可放大
+                  <div 
+                    className="relative w-24 h-24 md:w-32 md:h-32 flex-shrink-0 bg-black rounded-lg overflow-hidden border border-zinc-700 group/img"
+                    onClick={(e) => {
+                        e.stopPropagation(); // 阻止冒泡，避免點圖觸發投票
+                        onZoom(option.image_url); // 放大圖片
+                    }}
+                  >
+                      <img 
+                        src={option.image_url} 
+                        className="w-full h-full object-contain hover:scale-110 transition-transform duration-500 cursor-zoom-in" 
+                        alt={option.text}
+                      />
+                      {/* 放大鏡提示 */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity pointer-events-none">
+                          <ZoomIn className="text-white w-6 h-6" />
+                      </div>
+                  </div>
               ) : (
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center border ${isSelected ? 'border-gold-400 text-gold-400' : 'border-zinc-700 text-zinc-500 group-hover/btn:border-gold-400/50'}`}>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center border flex-shrink-0 ${isSelected ? 'border-gold-400 text-gold-400' : 'border-zinc-700 text-zinc-500 group-hover/btn:border-gold-400/50'}`}>
                     <div className={`w-2 h-2 rounded-full ${isSelected ? 'bg-gold-400' : 'bg-transparent group-hover/btn:bg-gold-400'}`}></div>
                   </div>
               )}
               
-              <div className="flex-1">
-                <span className={`text-xl font-medium ${isSelected ? 'text-gold-100' : 'text-zinc-300 group-hover/btn:text-white'}`}>
+              <div className="flex-1 min-w-0">
+                <span className={`text-xl font-medium break-words ${isSelected ? 'text-gold-100' : 'text-zinc-300 group-hover/btn:text-white'}`}>
                     {option.text}
                 </span>
               </div>
 
               {isSelected && (
-                  <motion.div initial={{scale:0}} animate={{scale:1}} className="text-gold-400 font-bold text-xs uppercase tracking-widest border border-gold-400 px-3 py-1 rounded-full">
-                      已投票!
+                  <motion.div initial={{scale:0}} animate={{scale:1}} className="text-gold-400 font-bold text-xs uppercase tracking-widest border border-gold-400 px-3 py-1 rounded-full whitespace-nowrap">
+                      已投票
                   </motion.div>
               )}
             </motion.button>
            )
-        })}
+        })}s
       </div>
     </motion.div>
   );
