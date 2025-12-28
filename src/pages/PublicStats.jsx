@@ -43,19 +43,27 @@ const PublicStats = () => {
     setLoading(false);
   };
 
-  const handleSearchUser = async (e) => {
+const handleSearchUser = async (e) => {
       const id = e.target ? e.target.value : e;
       setSearchId(id);
-      if(!id) {
+      
+      // 如果清空搜尋框，就清空結果
+      if(!id.trim()) {
           setUserVotes([]);
           return;
       }
       
-      const { data } = await supabase.from('votes')
-        .select('poll_id, option_id, polls(title), options(text)')
-        .eq('voter_identity', id);
+      // 使用 ilike 進行模糊搜尋 (%代表萬用字元)
+      const { data, error } = await supabase.from('votes')
+        .select('poll_id, option_id, polls(title), options(text), voter_identity')
+        .ilike('voter_identity', `%${id}%`) // 改這裡：前後加 % 代表模糊搜尋
+        .limit(20); // 限制顯示筆數，避免一次撈太多
         
-      if(data) setUserVotes(data);
+      if(error) {
+          console.error("Search error:", error);
+      } else if(data) {
+          setUserVotes(data);
+      }
   };
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center"><Loader2 className="animate-spin text-gold-400 w-10 h-10"/></div>;
