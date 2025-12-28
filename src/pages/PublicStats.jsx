@@ -31,7 +31,6 @@ const PublicStats = () => {
       .order('sort_order', { ascending: true });
 
     if (pollsData) {
-      // 計算總票數
       let total = 0;
       pollsData.forEach(p => {
         p.options.sort((a,b) => a.id - b.id);
@@ -120,11 +119,20 @@ const PublicStats = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {polls.map(poll => {
                 const data = poll.options.map(o => ({ name: o.text, votes: o.vote_count }));
-                // 簡化名字顯示，避免太長
-                const simplifiedData = data.map(d => ({
-                    ...d,
-                    displayName: d.name.length > 10 ? d.name.substring(0, 10) + '...' : d.name
-                }));
+                
+                // 計算百分比並處理名稱過長問題
+                const simplifiedData = data.map(d => {
+                    // 計算百分比 (防止除以 0)
+                    const percentage = poll.totalPollVotes > 0 
+                        ? ((d.votes / poll.totalPollVotes) * 100).toFixed(1) + '%' 
+                        : '0.0%';
+
+                    return {
+                        ...d,
+                        displayName: d.name.length > 10 ? d.name.substring(0, 10) + '...' : d.name,
+                        percentage: percentage // 把百分比存進去，等下 Tooltip 用
+                    };
+                });
 
                 return (
                     <motion.div 
@@ -143,11 +151,18 @@ const PublicStats = () => {
                                 <BarChart data={simplifiedData} layout="vertical">
                                     <XAxis type="number" hide />
                                     <YAxis dataKey="displayName" type="category" width={100} tick={{fill: '#888', fontSize: 10}} interval={0}/>
+                                    
+                                    {/* 修改 Tooltip 格式：顯示票數與百分比 */}
                                     <Tooltip 
                                         cursor={{fill: 'rgba(255,255,255,0.05)'}}
                                         contentStyle={{ backgroundColor: '#000', borderColor: '#333', borderRadius: '8px' }} 
                                         itemStyle={{ color: '#D4AF37' }} 
+                                        formatter={(value, name, props) => [
+                                            `${value} 票 (${props.payload.percentage})`, // 顯示格式：100 票 (25.5%)
+                                            '得票'
+                                        ]}
                                     />
+                                    
                                     <Bar dataKey="votes" radius={[0, 4, 4, 0]} barSize={20}>
                                         {data.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#D4AF37' : '#806921'} />
