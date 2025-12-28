@@ -1,19 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
-import { Loader2, ChevronDown, Award, Lock, ZoomIn, X, Search, Filter, Sparkles } from 'lucide-react';
+import { Loader2, ChevronDown, Award, Lock, ZoomIn, X, Search, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import FingerprintJS from '@fingerprintjs/fingerprintjs'; // 引入指紋套件
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 const LOGO_URL = "https://i.ibb.co/Q3jzj8r3/601973223-17842560999666048-6924136326722950788-n.jpg";
 
 const Toast = ({ message, onClose }) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 50 }} 
-    animate={{ opacity: 1, y: 0 }} 
-    exit={{ opacity: 0, y: 50 }}
-    className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-900 border border-gold-400 text-gold-100 px-6 py-3 rounded-full shadow-[0_0_20px_rgba(212,175,55,0.3)] z-50 flex items-center gap-2 whitespace-nowrap"
-  >
+  <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-900 border border-gold-400 text-gold-100 px-6 py-3 rounded-full shadow-[0_0_20px_rgba(212,175,55,0.3)] z-50 flex items-center gap-2 whitespace-nowrap">
     <Award size={16} /> {message}
   </motion.div>
 );
@@ -21,10 +16,7 @@ const Toast = ({ message, onClose }) => (
 const ImageLightbox = ({ src, onClose }) => {
   if (!src) return null;
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
-      className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out backdrop-blur-sm"
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out backdrop-blur-sm">
       <button className="absolute top-5 right-5 text-zinc-500 hover:text-white p-2"><X size={32} /></button>
       <motion.img initial={{ scale: 0.8 }} animate={{ scale: 1 }} src={src} className="max-w-full max-h-screen object-contain shadow-2xl rounded-lg" onClick={(e) => e.stopPropagation()} />
     </motion.div>
@@ -35,28 +27,23 @@ const Home = () => {
   const navigate = useNavigate();
   const [siteStatus, setSiteStatus] = useState('waiting');
   const [polls, setPolls] = useState([]);
-  const [filteredPolls, setFilteredPolls] = useState([]); // 搜尋/分類後的結果
+  const [filteredPolls, setFilteredPolls] = useState([]);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
-  
   const [votedMap, setVotedMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(true);
   const [toastMsg, setToastMsg] = useState('');
   const [zoomedImage, setZoomedImage] = useState(null);
-  
-  // 指紋 ID 狀態
   const [fingerprint, setFingerprint] = useState(null);
-  
   const pollsSectionRef = useRef(null);
 
-  // 初始化：獲取指紋
   useEffect(() => {
     const initFingerprint = async () => {
       const fp = await FingerprintJS.load();
       const result = await fp.get();
-      setFingerprint(result.visitorId); // 這就是該裝置唯一的 ID
+      setFingerprint(result.visitorId);
     };
     initFingerprint();
   }, []);
@@ -66,28 +53,15 @@ const Home = () => {
     fetchData();
     const subscription = supabase.channel('public:site_settings').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_settings' }, fetchData).subscribe();
     return () => { clearTimeout(timer); supabase.removeChannel(subscription); };
-  }, [fingerprint]); // 當指紋準備好後再 fetch 一次確認投票狀態
+  }, [fingerprint]);
 
-  // 處理搜尋與分類過濾
   useEffect(() => {
       let result = polls;
-      
-      // 1. 分類過濾
-      if (activeCategory !== 'All') {
-          // 假設分類寫在標題的【】內，例如 【創作】
-          result = result.filter(p => p.title.includes(`【${activeCategory}】`));
-      }
-
-      // 2. 關鍵字搜尋
+      if (activeCategory !== 'All') result = result.filter(p => p.title.includes(`【${activeCategory}】`));
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
-          result = result.filter(p => 
-              p.title.toLowerCase().includes(lowerTerm) || 
-              (p.description && p.description.toLowerCase().includes(lowerTerm)) ||
-              p.options.some(o => o.text.toLowerCase().includes(lowerTerm))
-          );
+          result = result.filter(p => p.title.toLowerCase().includes(lowerTerm) || (p.description && p.description.toLowerCase().includes(lowerTerm)) || p.options.some(o => o.text.toLowerCase().includes(lowerTerm)));
       }
-
       setFilteredPolls(result);
   }, [activeCategory, searchTerm, polls]);
 
@@ -95,13 +69,8 @@ const Home = () => {
     const { data: settings } = await supabase.from('site_settings').select('*').single();
     if (settings) setSiteStatus(settings.status);
 
-    const { data: pollsData } = await supabase
-      .from('polls')
-      .select(`*, options(*)`)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
+    const { data: pollsData } = await supabase.from('polls').select(`*, options(*)`).eq('is_active', true).order('sort_order', { ascending: true });
     
-    // 過濾時間
     const activePolls = pollsData?.filter(p => {
         if (p.start_at && new Date() < new Date(p.start_at)) return false;
         if (p.end_at && new Date() > new Date(p.end_at)) return false;
@@ -112,7 +81,6 @@ const Home = () => {
     setPolls(activePolls);
     setFilteredPolls(activePolls);
 
-    // 自動提取分類 (抓取【】內的文字)
     const cats = new Set();
     activePolls.forEach(p => {
         const match = p.title.match(/【(.*?)】/);
@@ -120,7 +88,6 @@ const Home = () => {
     });
     setCategories(['All', ...Array.from(cats)]);
     
-    // 使用 Fingerprint 檢查已投票
     if (fingerprint) {
         const { data: votes } = await supabase.from('votes').select('poll_id, option_id').eq('voter_identity', fingerprint);
         if (votes) {
@@ -136,16 +103,15 @@ const Home = () => {
     if (siteStatus !== 'voting') return showToast("目前不是投票時段");
     if (!fingerprint) return showToast("正在初始化安全驗證，請稍後...");
     
-    // 檢查是否被 Ban
     const { data: banned } = await supabase.from('banned_voters').select('*').eq('identity', fingerprint).single();
-    if (banned) return showToast("⛔ 您的裝置已被限制投票，請聯繫管理員");
+    if (banned) return showToast("⛔ 您的裝置已被限制投票");
 
     if (votedMap[pollId]) return;
 
+    // 樂觀更新
     setVotedMap(prev => ({ ...prev, [pollId]: optionId }));
     showToast("投票成功！");
 
-    // 獲取 IP (簡易版，透過第三方API)
     let ip = 'unknown';
     try {
         const res = await fetch('https://api.ipify.org?format=json');
@@ -153,37 +119,27 @@ const Home = () => {
         ip = json.ip;
     } catch(e) {}
 
+    // 改用新版 RPC，直接帶入 IP
     const { error } = await supabase.rpc('increment_vote', {
       option_id_input: optionId,
       poll_id_input: pollId,
-      voter_id_input: fingerprint // 使用指紋作為 ID
+      voter_id_input: fingerprint,
+      ip_input: ip 
     });
-    
-    // 補上 IP 紀錄 (因為 increment_vote 函數可能沒寫入 IP，我們手動 update 或修改函數，這邊示範 update)
-    if (!error) {
-        // 找到剛剛那筆票，把 IP 填進去 (這有點 tricky，嚴謹作法是改 RPC，但這裡為了不改動 DB Schema 太多)
-        // 為了簡單，我們假設 RPC 已經寫入 votes，我們再 update 最近的一筆
-        await supabase.from('votes')
-            .update({ ip_address: ip })
-            .eq('voter_identity', fingerprint)
-            .eq('poll_id', pollId)
-            .eq('option_id', optionId);
-    }
 
     if (error) {
       console.error(error);
-      showToast("投票發生錯誤");
+      // 如果失敗，回滾狀態
+      const newMap = {...votedMap};
+      delete newMap[pollId];
+      setVotedMap(newMap);
+      showToast("投票發生錯誤，請重試");
     }
   };
 
   const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
-  const scrollToPolls = () => {
-      pollsSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-      // 如果有分類，自動跳過intro
-      if(categories.length > 1 && siteStatus === 'voting') {
-          // 這裡可以預設選第一個分類，或保持 All
-      }
-  };
+  const scrollToPolls = () => { pollsSectionRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+  const handleAdminClick = () => { navigate('/panziiadmin'); };
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center"><Loader2 className="animate-spin text-gold-400 w-10 h-10" /></div>;
 
@@ -200,7 +156,6 @@ const Home = () => {
       )}
 
       <motion.header initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 3.5 }} className="min-h-screen flex flex-col items-center justify-center relative z-10 px-4">
-        {/* Logo & Title ... (同前) */}
         <div className="relative group cursor-pointer">
             <div className="absolute inset-0 bg-gold-400 rounded-full blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-700"></div>
             <img src={LOGO_URL} alt="Logo" className="w-48 h-48 md:w-64 md:h-64 rounded-full border-[1px] border-gold-500/50 object-cover relative z-10 shadow-2xl" />
@@ -218,43 +173,24 @@ const Home = () => {
       </motion.header>
 
       <main ref={pollsSectionRef} className="max-w-6xl mx-auto px-4 py-24 relative z-10 min-h-[80vh]">
-        
-        {/* 搜尋與分類區 (只在投票期間顯示) */}
         {siteStatus === 'voting' && (
             <div className="mb-12 space-y-6">
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                     <h2 className="text-3xl font-luxury text-white">年度獎項</h2>
-                    {/* 搜尋框 */}
                     <div className="relative w-full md:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                        <input 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:border-gold-500 outline-none transition-all"
-                            placeholder="搜尋獎項或參賽者..."
-                        />
+                        <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:border-gold-500 outline-none transition-all" placeholder="搜尋獎項或參賽者..." />
                     </div>
                 </div>
-
-                {/* 分類 Chips */}
                 {categories.length > 1 && (
                     <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                         {categories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-all border
-                                    ${activeCategory === cat 
-                                        ? 'bg-gold-500 text-black border-gold-500 font-bold' 
-                                        : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:border-gold-500/50 hover:text-white'}
-                                `}
-                            >
+                            <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-all border ${activeCategory === cat ? 'bg-gold-500 text-black border-gold-500 font-bold' : 'bg-zinc-900/50 text-zinc-400 border-zinc-800 hover:border-gold-500/50 hover:text-white'}`}>
                                 {cat === 'All' ? '全部獎項' : cat}
                             </button>
                         ))}
                     </div>
                 )}
-                
                 <div className="w-full h-px bg-zinc-800"></div>
             </div>
         )}
@@ -280,16 +216,9 @@ const Home = () => {
               {filteredPolls.map((poll, index) => (
                 <PollCard key={poll.id} poll={poll} index={index} votedOptionId={votedMap[poll.id]} onVote={handleVote} onZoom={setZoomedImage} />
               ))}
-              
               {filteredPolls.length === 0 && <p className="text-center text-gray-500 py-12">沒有找到符合條件的投票。</p>}
-
-              {/* 第二彈預告 */}
               <div className="text-center py-24 border-t border-zinc-900 mt-12">
-                  <motion.div 
-                    initial={{ scale: 0.9, opacity: 0.5 }}
-                    whileInView={{ scale: 1, opacity: 1 }}
-                    className="inline-block p-8 rounded-3xl bg-gradient-to-br from-zinc-900 to-black border border-gold-900/30"
-                  >
+                  <motion.div initial={{ scale: 0.9, opacity: 0.5 }} whileInView={{ scale: 1, opacity: 1 }} className="inline-block p-8 rounded-3xl bg-gradient-to-br from-zinc-900 to-black border border-gold-900/30">
                       <Sparkles className="w-12 h-12 text-gold-400 mx-auto mb-4 animate-pulse" />
                       <h3 className="text-3xl font-luxury text-gold-200 mb-2">Coming Soon</h3>
                       <p className="text-zinc-500 tracking-[0.2em] text-sm uppercase">即將迎來第二彈</p>
@@ -302,13 +231,12 @@ const Home = () => {
       
       <footer className="py-12 text-center border-t border-zinc-900 bg-black relative z-10 flex flex-col items-center gap-4">
          <p className="text-zinc-600 text-xs tracking-widest uppercase">© 2025 Golden Threads Awards. All rights reserved.</p>
-         <button onClick={() => navigate('/panziiadmin')} className="text-zinc-900 hover:text-zinc-800 transition-colors p-2" title="Admin Login"><Lock size={12} /></button>
+         <button onClick={handleAdminClick} className="text-zinc-900 hover:text-zinc-800 transition-colors p-2" title="Admin Login"><Lock size={12} /></button>
       </footer>
     </div>
   );
 };
 
-// PollCard 保持原樣，確保沒有多餘的 s
 const PollCard = ({ poll, index, votedOptionId, onVote, onZoom }) => {
   const hasVoted = !!votedOptionId;
   return (
